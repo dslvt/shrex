@@ -1,12 +1,16 @@
-from aiogram import Bot, Dispatcher, executor, types
+from aiogram import Bot, Dispatcher, types
+import asyncio
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, FSInputFile
+from aiogram.filters import Command, CommandStart
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram import Bot, Dispatcher, F, Router, html
 from PIL import Image
 import torch
 from dotenv import load_dotenv
 import os
-
 from share import *
 import config
-
 import cv2
 import einops
 import numpy as np
@@ -14,13 +18,11 @@ import torch
 import random
 from PIL import Image
 from pathlib import Path
-
 from pytorch_lightning import seed_everything
 from modules.annotator.util import resize_image, HWC3
 from modules.annotator.normalbae import NormalBaeDetector
 from modules.cldm.model import create_model, load_state_dict
 from modules.cldm.ddim_hacked import DDIMSampler
-
 import os
 import cv2
 import copy
@@ -30,6 +32,8 @@ import onnxruntime
 import numpy as np
 from PIL import Image
 from typing import List, Union, Dict, Set, Tuple
+
+import pdb
 
 import numpy as np
 from modules.restoration import *
@@ -58,8 +62,7 @@ codeformer_net.load_state_dict(checkpoint)
 codeformer_net.eval()
 
 load_dotenv()
-bot = Bot(token=os.environ['token_bot'])
-dp = Dispatcher(bot)
+
 
 preprocessor = None
 
@@ -71,6 +74,12 @@ model.load_state_dict(load_state_dict(
     f'./models/{model_name}.pth', location='cuda'), strict=False)
 model = model.cuda()
 ddim_sampler = DDIMSampler(model)
+
+example_prompts = {
+    'vermeer': "Painting of lady Johannes Vermeer, Girl with a Pearl Earring, beautiful, dynamic posture, (perfect anatomy), (narrow waist:1.1), (heavenly), (black haired goddess with neon blue eyes:1.2), by Daniel F. Gerhartz. Cowboy shot, full body, (masterpiece) (beautiful composition) (Fuji film), DLSR, highres, high resolution, intricately detailed, (hyperrealistic oil painting:0.77), 4k, highly detailed face, highly detailed skin, dynamic lighting, Rembrandt lighting.",
+    'rembrant': 'Rembrandt, (distant view:1.3),(award-winning painting:1.3), (8k, best quality:1.3), (realistic painting:1.1), A gorgeous and intricate painting, fine art, portrait, mustache, blonde hair, robe, hat, male focus, solo, old, wrinkles',
+    'van gogh': 'masterpiece,best quality,1girl,Van Gogh,oil painting,'
+}
 
 
 def process(det, input_image, prompt, a_prompt, n_prompt, num_samples, image_resolution, detect_resolution, ddim_steps, guess_mode, strength, scale, seed, eta):
@@ -187,10 +196,7 @@ def swap_face(face_swapper,
 
 async def photo(message):
     file_id = message.photo[-1].file_id
-    await message.photo[-1].download(f"images/input/{file_id}.png")
-    # file = await bot.get_file(file_id)
-    # file_path = file.file_path
-    # await bot.download_file(file_path, f"images/input/{file_id}.png")
+    await message.bot.download(file=file_id, destination=f"images/input/{file_id}.png")
 
     img = Image.open(f"images/input/{file_id}.png").convert("RGB")
     img = np.asarray(img)
@@ -345,9 +351,8 @@ def face_swapping_tool(source_img: Union[Image.Image, List],
     return result_image
 
 
-async def generation(img):
+async def generation(img, prompt):
     input_image = img
-    prompt = "Painting of lady Johannes Vermeer, Girl with a Pearl Earring, beautiful, dynamic posture, (perfect anatomy), (narrow waist:1.1), (heavenly), (black haired goddess with neon blue eyes:1.2), by Daniel F. Gerhartz. Cowboy shot, full body, (masterpiece) (beautiful composition) (Fuji film), DLSR, highres, high resolution, intricately detailed, (hyperrealistic oil painting:0.77), 4k, highly detailed face, highly detailed skin, dynamic lighting, Rembrandt lighting. <lora:epi_noiseoffset:1> <lora:detail_tweaker:0.8>"
     a_prompt = 'best quality, extremely detailed'
     n_prompt = '(worst quality, low quality, thumbnail:1.4), signature, artist name, web address, cropped, jpeg artifacts, watermark, username, collage, grid, (photography, realistic, hyperrealistic:1.4)'
     num_samples = 1
@@ -366,15 +371,30 @@ async def generation(img):
     return items[1]
 
 
-@dp.message_handler(commands=['start'])
-async def send_welcome(message: types.Message):
+class Form(StatesGroup):
+    image = State()
+    text = State()
+
+
+form_router = Router()
+
+
+@form_router.message(CommandStart())
+async def send_welcome(message: types.Message, state: FSMContext):
+    await state.set_state(Form.image)
     await message.reply("Hello! I can create different images based on your selfie. Send a picture to get started.")
 
 
-@dp.message_handler(content_types=['photo'])
-async def get_picture(message: types.Message):
-    img, file_id = await (photo(message))
-    generated_img = await (generation(img))
+@form_router.message(Form.text)
+async def get_text(message: types.Message, state: FSMContext):
+    prompt = message.text
+    if prompt in example_prompts.keys():
+        prompt = example_prompts[prompt]
+    data = await state.get_data()
+    img = data['img']
+    file_id = data['file_id']
+
+    generated_img = await (generation(img, prompt))
     output_image = Image.fromarray(np.uint8(generated_img)).convert('RGB')
     output_image.save(f'./images/output/{file_id}_generated.png')
 
@@ -399,16 +419,35 @@ async def get_picture(message: types.Message):
     result_image = Image.fromarray(result_image)
     result_image.save(f'./images/output/{file_id}.png')
 
-    result_image = open(f'./images/output/{file_id}.png', "rb")
-    await (message.answer_photo(result_image))
+    result_image = FSInputFile(f'./images/output/{file_id}.png', "rb")
+    await state.set_state(Form.image)
+    await (message.answer_photo(result_image, caption='To generate more, sent another image'))
 
 
 # @dp.message_handler(content_types=['photo'])
-# async def get_picture(message: types.Message):
-#     # await (message.answer('Please, load it as a document'))
-#     pdb.set_trace()
-#     print(message)
+@form_router.message(Form.image)
+async def get_picture(message: types.Message, state: FSMContext):
+    img, file_id = await (photo(message))
+    await state.update_data(file_id=file_id)
+    await state.update_data(img=img)
+    await state.set_state(Form.text)
 
+    kb = [
+        [KeyboardButton(text='Johannes Vermeer')],
+        [KeyboardButton(text='Rembrant')],
+        [KeyboardButton(text='Van Gogh')]
+    ]
+
+    keyboard = ReplyKeyboardMarkup(keyboard=kb)
+    await message.reply('Now choose on the keyboard or type the style in which you want your selfie to be', reply_markup=keyboard)
+
+async def main():
+    bot = Bot(token=os.environ['token_bot'])
+    dp = Dispatcher()
+    dp.include_router(form_router)
+
+    await dp.start_polling(bot)
 
 if __name__ == '__main__':
-    executor.start_polling(dp, skip_updates=True)
+    # executor.start_polling(dp, skip_updates=True)
+    asyncio.run(main())
