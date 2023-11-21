@@ -3,6 +3,7 @@
 *.ckpt
 *.onnx
 *.safetensors
+*.zip
 CodeFormer/
 images/
 
