@@ -4,7 +4,6 @@ from torch import nn
 from copy import deepcopy
 
 from modules.cf.utils import load_file_from_url
-from modules.cf.utils import download_pretrained_models
 from modules.cf.models.common import Conv
 
 from modules.cf.models.retinaface import RetinaFace

@@ -354,34 +354,7 @@ class FaceRestoreHelper(object):
                 face_size = self.face_size
             inv_restored = cv2.warpAffine(
                 restored_face, inverse_affine, (w_up, h_up))
-
-            # if draw_box or not self.use_parse:  # use square parse maps
-            #     mask = np.ones(face_size, dtype=np.float32)
-            #     inv_mask = cv2.warpAffine(mask, inverse_affine, (w_up, h_up))
-            #     # remove the black borders
-            #     inv_mask_erosion = cv2.erode(
-            #         inv_mask, np.ones((int(2 * self.upscale_factor), int(2 * self.upscale_factor)), np.uint8))
-            #     pasted_face = inv_mask_erosion[:, :, None] * inv_restored
-            #     total_face_area = np.sum(inv_mask_erosion)  # // 3
-            #     # add border
-            #     if draw_box:
-            #         h, w = face_size
-            #         mask_border = np.ones((h, w, 3), dtype=np.float32)
-            #         border = int(1400/np.sqrt(total_face_area))
-            #         mask_border[border:h-border, border:w-border,:] = 0
-            #         inv_mask_border = cv2.warpAffine(mask_border, inverse_affine, (w_up, h_up))
-            #         inv_mask_borders.append(inv_mask_border)
-            #     if not self.use_parse:
-            #         # compute the fusion edge based on the area of face
-            #         w_edge = int(total_face_area**0.5) // 20
-            #         erosion_radius = w_edge * 2
-            #         inv_mask_center = cv2.erode(inv_mask_erosion, np.ones((erosion_radius, erosion_radius), np.uint8))
-            #         blur_size = w_edge * 2
-            #         inv_soft_mask = cv2.GaussianBlur(inv_mask_center, (blur_size + 1, blur_size + 1), 0)
-            #         if len(upsample_img.shape) == 2:  # upsample_img is gray image
-            #             upsample_img = upsample_img[:, :, None]
-            #         inv_soft_mask = inv_soft_mask[:, :, None]
-
+            
             # always use square mask
             mask = np.ones(face_size, dtype=np.float32)
             inv_mask = cv2.warpAffine(mask, inverse_affine, (w_up, h_up))

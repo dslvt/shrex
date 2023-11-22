@@ -18,8 +18,8 @@ from share import *
 from modules.cldm.model import load_state_dict
 
 
-sd15_state_dict = load_state_dict(path_sd15)
-sd15_with_control_state_dict = load_state_dict(path_sd15_with_control)
+sd_state_dict = load_state_dict(path_sd15)
+sd_with_control_state_dict = load_state_dict(path_sd15_with_control)
 input_state_dict = load_state_dict(path_input)
 
 
@@ -32,8 +32,7 @@ def get_node_name(name, parent_name):
     return True, name[len(parent_name):]
 
 
-keys = sd15_with_control_state_dict.keys()
-# print(input_state_dict.keys())
+keys = sd_with_control_state_dict.keys()
 
 final_state_dict = {}
 for key in keys:
@@ -42,18 +41,16 @@ for key in keys:
     if is_first_stage or is_cond_stage:
         final_state_dict[key] = input_state_dict[key]
         continue
-    p = sd15_with_control_state_dict[key]
+    p = sd_with_control_state_dict[key]
     is_control, node_name = get_node_name(key, 'control_')
     if is_control:
         sd15_key_name = 'model.diffusion_' + node_name
     else:
         sd15_key_name = key
     if sd15_key_name in input_state_dict:
-        p_new = p + input_state_dict[sd15_key_name] - sd15_state_dict[sd15_key_name]
-        # print(f'Offset clone from [{sd15_key_name}] to [{key}]')
+        p_new = p + input_state_dict[sd15_key_name] - sd_state_dict[sd15_key_name]
     else:
         p_new = p
-        # print(f'Direct clone to [{key}]')
     final_state_dict[key] = p_new
 
 torch.save(final_state_dict, path_output)
