@@ -8,8 +8,12 @@ import numpy as np
 import copy
 
 
-def get_face_analyser(model_path: str, providers,
+def get_face_analyser(providers,
                       det_size=(320, 320)):
+    """
+        Gets an analysis of the face via the insight face python library
+        using the model we have
+    """
     face_analyser = insightface.app.FaceAnalysis(
         name="buffalo_l", root="./models/", providers=providers)
     face_analyser.prepare(ctx_id=0, det_size=det_size)
@@ -17,9 +21,11 @@ def get_face_analyser(model_path: str, providers,
 
 
 def get_face_swap_model(model_path: str):
-    model = insightface.model_zoo.get_model(model_path)
-    return model
-
+    """
+        Fetches the model used in performing face swapping.
+    """
+    return insightface.model_zoo.get_model(model_path)
+    
 
 def swap_face(face_swapper,
               source_faces,
@@ -28,18 +34,20 @@ def swap_face(face_swapper,
               target_index,
               temp_frame):
     """
-    paste source_face on target image
+    performs an affine transformation to map source 
+    face to a face in the target domain.
     """
-    source_face = source_faces[source_index]
     target_face = target_faces[target_index]
-
+    source_face = source_faces[source_index]
+    
     return face_swapper.get(temp_frame, target_face, source_face, paste_back=True)
 
 
 def get_many_faces(face_analyser,
                    frame: np.ndarray):
     """
-    get faces from left to right by order
+    Handles multiple faces in an image.
+    get faces in the order from left to right
     """
     try:
         face = face_analyser.get(frame)
@@ -53,9 +61,17 @@ def face_swapping_tool(source_img: Union[Image.Image, List],
                        source_indexes: str,
                        target_indexes: str,
                        model: str):
+    """
+        This function handles swapping the faces in the source image to those in the target subspace.
+        It works by
+            * Analysing the faces in the image
+            * fetching the list of faces in the model
+            * Replacing the faces
+            * returns a new image in the chosen style.
+    """
     providers = onnxruntime.get_available_providers()
 
-    face_analyser = get_face_analyser(model, providers)
+    face_analyser = get_face_analyser(providers)
 
     model_path = os.path.join('./models/', model)
     face_swapper = get_face_swap_model(model_path)
