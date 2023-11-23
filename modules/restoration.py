@@ -14,6 +14,10 @@ from modules.cf.realesrgan import RealESRGANer
 
 
 def check_ckpts():
+    """
+        This function checks for the availabilty of checkpoints necessary to perform face restoration
+        We have different models that can be used for this task (RealESRGAN and CodeFormer).
+    """
     pretrain_model_url = {
         'codeformer': 'https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/codeformer.pth',
         'detection': 'https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/detection_Resnet50_Final.pth',
@@ -37,6 +41,9 @@ def check_ckpts():
 
 # set enhancer with RealESRGAN
 def set_realesrgan():
+    """
+        Constructs the real esrgan model needed for face restoration
+    """
     half = True if torch.cuda.is_available() else False
     model = RRDBNet(
         num_in_ch=3,
@@ -46,7 +53,7 @@ def set_realesrgan():
         num_grow_ch=32,
         scale=2,
     )
-    upsampler = RealESRGANer(
+    return RealESRGANer(
         scale=2,
         model_path="models/realesrgan/RealESRGAN_x2plus.pth",
         model=model,
@@ -55,11 +62,14 @@ def set_realesrgan():
         pre_pad=0,
         half=half,
     )
-    return upsampler
 
 
 def face_restoration(img, background_enhance, face_upsample, upscale, codeformer_fidelity, upsampler, codeformer_net, device):
-    """Run a single prediction on the model"""
+    """Run a single prediction on the model
+        In this function, we construct the pipeline necessary for converting 
+        a low resolution image to a high resolution one depending on the chosen model.
+        We perform error handling to ensure efficient performance of the function
+    """
     try:  # global try
         # take the default setting for the demo
         has_aligned = False
